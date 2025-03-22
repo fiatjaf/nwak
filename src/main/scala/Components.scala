@@ -48,16 +48,27 @@ object Components {
       "if this is a private key:",
       div(
         cls := "pl-2 mb-2",
-        entry(
-          "nsec",
-          NIP19.encode(PrivateKey(bytes32)),
-          Some(
-            selectable(
-              store,
-              NIP19.encode(PrivateKey(bytes32))
-            )
-          )
-        ),
+          (store.nip07signer: Signal[IO,Resource[IO,NIP07Signer[IO]]]).map{ signer =>
+            signer.use(_.publicKey).map(_ == PrivateKey(bytes32).publicKey.xonly)
+            .toResource.flatMap{ alreadyUsingThisPubkey =>
+                fixableEntry(
+                  "nsec",
+                  NIP19.encode(PrivateKey(bytes32)),
+                  fixWith = (
+                    IO(PrivateKey(bytes32))
+                    .map(NIP07.mkDebuggingSigner).flatMap(store.nip07signer.set)
+                  ),
+                  buttonLabel = "use as debugging key",
+                  selectLink = Some(
+                    selectable(
+                      store,
+                      NIP19.encode(PrivateKey(bytes32))
+                    )
+                  ),
+                  enable = !alreadyUsingThisPubkey
+                )
+            }
+          },
         entry(
           "npub",
           NIP19.encode(PrivateKey(bytes32).publicKey.xonly),
@@ -121,11 +132,21 @@ object Components {
         )
       },
       sk.map { k =>
-        entry(
-          "nsec",
-          NIP19.encode(k),
-          Some(selectable(store, NIP19.encode(k)))
-        )
+        (store.nip07signer: Signal[IO,Resource[IO,NIP07Signer[IO]]]).map{ signer =>
+          signer.use(_.publicKey).map(_ == k.publicKey.xonly).toResource.flatMap{
+            alreadyUsingThisPubkey => 
+              fixableEntry(
+                "nsec",
+                NIP19.encode(k),
+                fixWith = (
+                  IO(NIP07.mkDebuggingSigner(k)).flatMap(store.nip07signer.set)
+                ),
+                buttonLabel = "use as debugging key",
+                selectLink = Some(selectable(store, NIP19.encode(k))),
+                enable = !alreadyUsingThisPubkey
+              )
+          }
+        }
       },
       entry(
         "public key (hex)",
@@ -482,19 +503,24 @@ object Components {
     key: String,
     value: String,
     fixWith: => IO[Unit],
+    selectLink: Option[Resource[IO, HtmlSpanElement[IO]]] = None,
     buttonLabel: String = "fix",
-    notice: String = ""
+    notice: String = "",
+    enable: Boolean = true // whether to actually dispay the fix stuff
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "flex items-center space-x-3",
       span(cls := "font-bold", key + " "),
       span(cls := "font-mono max-w-xl break-all", value),
-      button(
-        buttonLabel,
-        Styles.buttonSmall,
-        onClick --> (_.foreach{_ => fixWith})
-      ),
-      if(notice.nonEmpty) then
+      selectLink,
+      if enable then
+        Some(button(
+          buttonLabel,
+          Styles.buttonSmall,
+          onClick --> (_.foreach{_ => fixWith})
+        )) 
+      else None,
+      if(notice.nonEmpty && enable) then
         Some(span(cls := "font-mono max-w-xl break-all", " " + notice))
       else None
 

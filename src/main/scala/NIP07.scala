@@ -15,6 +15,7 @@ import io.circe.parser.*
 import io.circe.syntax.*
 import scala.scalajs.js.JSON
 import scoin.XOnlyPublicKey
+import scoin.PrivateKey
 
 /**
   * basic NIP07 client for signing events
@@ -24,6 +25,7 @@ trait NIP07Signer[F[_]]:
   def publicKeyHex: F[String]
   def publicKey: F[scoin.XOnlyPublicKey]
   def signEvent(unsignedEvent: Event): F[Event]
+  def isDebuggingSigner: F[Boolean]
 
 object NIP07:
 
@@ -46,7 +48,7 @@ object NIP07:
   def mkDebuggingSigner(
     privkey: scoin.PrivateKey = Utils.keyOne
   ): Resource[IO,NIP07Signer[IO]] = 
-    Resource.pure(new NIP07DebuggingSignerIO)
+    Resource.pure(new NIP07DebuggingSignerIO(privkey))
 
   // Create an fs2 Stream that registers an event listener on dom.window for the "load" event.
   private def loadEventStream: fs2.Stream[IO, org.scalajs.dom.Event] =
@@ -70,6 +72,7 @@ object NIP07:
 //////////
 
 class NIP07SignerImplIO(window: Window[IO]) extends NIP07Signer[IO]:
+  def isDebuggingSigner: IO[Boolean] = IO(false)
   def publicKeyHex: IO[String] = 
     IO.fromPromise(IO(_nostr.getPublicKey()))
 
@@ -89,10 +92,9 @@ class NIP07SignerImplIO(window: Window[IO]) extends NIP07Signer[IO]:
       .map(_.as[Event])
       .flatMap(IO.fromEither)
 
-class NIP07DebuggingSignerIO extends NIP07Signer[IO]:
-  private val privkey = Utils.keyOne
-  
-  def publicKeyHex: IO[String] = IO(privkey.publicKey.xonly.toHex)
+class NIP07DebuggingSignerIO(privkey: scoin.PrivateKey) extends NIP07Signer[IO]:
+  def isDebuggingSigner: IO[Boolean] = IO(true)
+  def publicKeyHex: IO[String] = IO(privkey).map(_.publicKey.xonly.toHex)
 
   def publicKey: IO[XOnlyPublicKey] =
     publicKeyHex

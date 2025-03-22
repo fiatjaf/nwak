@@ -38,12 +38,12 @@ object Main extends IOWebApp {
           ),
           div(
             cls := "flex-1",
-            result(store)
+            renderResult(store)
           ),
           // signing preferences
           div(
             cls := "flex gap-2 justify-end flex-wrap lg:mt-6 pt-6 border-t border-gray-200 space-y-4 text-sm text-gray-600",
-            nip07signer(store)
+            renderNip07Signer(store)
           ),
           // links at bottom
           div(
@@ -60,14 +60,14 @@ object Main extends IOWebApp {
           cls := "order-1 lg-order-2 justify-self-start lg:flex lg:items-center lg:justify-center w-full",
           div(
             cls := "bg-white w-full lg:w-auto lg:rounded-lg shadow-md p-4 pt-6 lg:p-12",
-            input(store),
-            actions(store)
+            renderInput(store),
+            renderActions(store)
           )
         )
       )
   }
 
-  def actions(store: Store): Resource[IO, HtmlDivElement[IO]] =
+  def renderActions(store: Store): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "flex flex-wrap justify-evenly pt-4 gap-2",
       store.input.map {
@@ -155,7 +155,11 @@ object Main extends IOWebApp {
                   id = None
                 )
               )
-              signedEvent <- signer.signEvent(generatedEvent)
+              // only auto-sign the event if we are using debugging signer
+              signedEvent <- signer.isDebuggingSigner.ifM(
+                ifTrue = signer.signEvent(generatedEvent),
+                ifFalse = IO(generatedEvent)
+              )
             yield signedEvent
           }
           .map(_.asJson.printWith(jsonPrinter))
@@ -173,7 +177,7 @@ object Main extends IOWebApp {
       )
     )
 
-  def input(store: Store): Resource[IO, HtmlDivElement[IO]] =
+  def renderInput(store: Store): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "w-full",
       textArea.withSelf { self =>
@@ -189,7 +193,7 @@ object Main extends IOWebApp {
       }
     )
 
-  def result(store: Store): Resource[IO, HtmlDivElement[IO]] =
+  def renderResult(store: Store): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "w-full",
       store.result.map {
@@ -208,7 +212,7 @@ object Main extends IOWebApp {
       }
     )
 
-  def nip07signer(store: Store): Resource[IO, HtmlDivElement[IO]] =
+  def renderNip07Signer(store: Store): Resource[IO, HtmlDivElement[IO]] =
     (
       SignallingRef[IO].of(false).toResource,
       SignallingRef[IO].of(false).toResource,
@@ -217,6 +221,13 @@ object Main extends IOWebApp {
 
         for
         _ <- NIP07.isAvailable.flatMap(nip07isAvailable.set).background
+        _ <- store.nip07signer.discrete.evalTap(
+          _.use(_.isDebuggingSigner)
+           .ifM(
+            ifTrue = useNip07.set(false),
+            ifFalse = useNip07.set(true)
+           )
+        ).compile.drain.background
         html <- div(
           (nip07isAvailable: Signal[IO,Boolean],
           useNip07: Signal[IO,Boolean],
