@@ -52,7 +52,7 @@ object Main extends IOWebApp {
               href := "https://github.com/fiatjaf/nwak",
               cls := "block hover:text-gray-900",
               "source code"
-            ),
+            )
           )
         ),
         // main content
@@ -97,45 +97,56 @@ object Main extends IOWebApp {
       store.result.map {
         case Right(evp: EventPointer) if evp.relays.nonEmpty =>
           Some(
-            SignallingRef[IO].of(false).toResource.flatMap { fetchIsInProgress =>
+            SignallingRef[IO].of(false).toResource.flatMap {
+              fetchIsInProgress =>
 
-              def fetchFromRelay(rawUri: String): IO[Option[Event]] =
-                IO.fromEither(org.http4s.Uri.fromString(rawUri))
+                def fetchFromRelay(rawUri: String): IO[Option[Event]] =
+                  IO.fromEither(org.http4s.Uri.fromString(rawUri))
                     .toResource
                     .flatMap(Relay.mkResourceForIO(_))
-                    .use{ relay => relay.lookupEventById(evp.id, timeout = 30.seconds) }
-                    .reject{
-                      case None => new RuntimeException(s"event-not-found: ${evp.id} not found at $rawUri")
+                    .use { relay =>
+                      relay.lookupEventById(evp.id, timeout = 30.seconds)
+                    }
+                    .reject { case None =>
+                      new RuntimeException(
+                        s"event-not-found: ${evp.id} not found at $rawUri"
+                      )
                     }
 
-              val tryFetchFromEachOrNone =
-                multiRaceAllFailOrFirstToSucceed(evp.relays.map(fetchFromRelay))
-                .recover(_ => None)
+                val tryFetchFromEachOrNone =
+                  multiRaceAllFailOrFirstToSucceed(
+                    evp.relays.map(fetchFromRelay)
+                  )
+                    .recover(_ => None)
 
-              def updateInput(maybeEvent: Option[Event]): IO[Unit] = maybeEvent match
-                case Some(event) => store.input.set(event.asJson.printWith(jsonPrinter))
-                // for now we will just display a failure message in the input
-                // textarea, but this should be made better
-                case None =>
-                  store.input.set(s"tried all the given relay hints, but event ${evp.id} was not found.")
+                def updateInput(maybeEvent: Option[Event]): IO[Unit] =
+                  maybeEvent match
+                    case Some(event) =>
+                      store.input.set(event.asJson.printWith(jsonPrinter))
+                    // for now we will just display a failure message in the input
+                    // textarea, but this should be made better
+                    case None =>
+                      store.input.set(
+                        s"tried all the given relay hints, but event ${evp.id} was not found."
+                      )
 
-              val fetchOrUnit = fetchIsInProgress.get.flatMap {
-                case true => IO.unit
-                case false =>
-                  fetchIsInProgress.set(true)
-                  *> tryFetchFromEachOrNone.flatMap(updateInput)
-                  *> fetchIsInProgress.set(false)
-              }
-              val buttonLabel = fetchIsInProgress.map {
-                case true => "fetching ..."
-                case false => "fetch event"
-              }
-              button(
-                Styles.button,
-                buttonLabel,
-                onClick -->(_.foreach(_ => fetchOrUnit)),
-                disabled <-- fetchIsInProgress
-              )
+                val fetchOrUnit = fetchIsInProgress.get.flatMap {
+                  case true => IO.unit
+                  case false =>
+                    fetchIsInProgress.set(true)
+                      *> tryFetchFromEachOrNone.flatMap(updateInput)
+                      *> fetchIsInProgress.set(false)
+                }
+                val buttonLabel = fetchIsInProgress.map {
+                  case true  => "fetching ..."
+                  case false => "fetch event"
+                }
+                button(
+                  Styles.button,
+                  buttonLabel,
+                  onClick --> (_.foreach(_ => fetchOrUnit)),
+                  disabled <-- fetchIsInProgress
+                )
             }
           )
         case _ => None
@@ -144,26 +155,28 @@ object Main extends IOWebApp {
         Styles.button,
         "generate event",
         onClick --> (_.foreach(_ =>
-          Resource.suspend(store.nip07signer.get).use{ signer =>
-            for
-              pubkey <- signer.publicKey
-              generatedEvent <- IO(
-                Event(
-                  kind = 1,
-                  content = "hello world",
-                  pubkey = Some(pubkey),
-                  id = None
+          Resource
+            .suspend(store.nip07signer.get)
+            .use { signer =>
+              for
+                pubkey <- signer.publicKey
+                generatedEvent <- IO(
+                  Event(
+                    kind = 1,
+                    content = "hello world",
+                    pubkey = Some(pubkey),
+                    id = None
+                  )
                 )
-              )
-              // only auto-sign the event if we are using debugging signer
-              signedEvent <- signer.isDebuggingSigner.ifM(
-                ifTrue = signer.signEvent(generatedEvent),
-                ifFalse = IO(generatedEvent)
-              )
-            yield signedEvent
-          }
-          .map(_.asJson.printWith(jsonPrinter))
-          .flatMap(store.input.set)
+                // only auto-sign the event if we are using debugging signer
+                signedEvent <- signer.isDebuggingSigner.ifM(
+                  ifTrue = signer.signEvent(generatedEvent),
+                  ifFalse = IO(generatedEvent)
+                )
+              yield signedEvent
+            }
+            .map(_.asJson.printWith(jsonPrinter))
+            .flatMap(store.input.set)
         ))
       ),
       button(
@@ -185,9 +198,7 @@ object Main extends IOWebApp {
           cls := "w-full p-2 lg:p-4 min-h-[280px] lg:min-h-[370px] lg:min-w-[500px] font-mono rounded-lg bg-glade-green-50 border border-glade-green-200 text-gray-900",
           spellCheck := false,
           placeholder := "paste something nostric (event JSON, nprofile, npub, nevent etc or hex key or id)",
-          onInput --> (_.foreach(_ =>
-            self.value.get.flatMap(store.input.set)
-          )),
+          onInput --> (_.foreach(_ => self.value.get.flatMap(store.input.set))),
           value <-- store.input
         )
       }
@@ -215,23 +226,27 @@ object Main extends IOWebApp {
   def renderNip07Signer(store: Store): Resource[IO, HtmlDivElement[IO]] =
     (
       SignallingRef[IO].of(false).toResource,
-      SignallingRef[IO].of(false).toResource,
-    ).flatMapN {
-      (nip07isAvailable, useNip07) =>
-
-        for
+      SignallingRef[IO].of(false).toResource
+    ).flatMapN { (nip07isAvailable, useNip07) =>
+      for
         _ <- NIP07.isAvailable.flatMap(nip07isAvailable.set).background
-        _ <- store.nip07signer.discrete.evalTap(
-          _.use(_.isDebuggingSigner)
-           .ifM(
-            ifTrue = useNip07.set(false),
-            ifFalse = useNip07.set(true)
-           )
-        ).compile.drain.background
+        _ <- store.nip07signer.discrete
+          .evalTap(
+            _.use(_.isDebuggingSigner)
+              .ifM(
+                ifTrue = useNip07.set(false),
+                ifFalse = useNip07.set(true)
+              )
+          )
+          .compile
+          .drain
+          .background
         html <- div(
-          (nip07isAvailable: Signal[IO,Boolean],
-          useNip07: Signal[IO,Boolean],
-          store.nip07signer: Signal[IO,Resource[IO,NIP07Signer[IO]]]).mapN{
+          (
+            nip07isAvailable: Signal[IO, Boolean],
+            useNip07: Signal[IO, Boolean],
+            store.nip07signer: Signal[IO, Resource[IO, NIP07Signer[IO]]]
+          ).mapN {
             case (true, true, signer) =>
               div(
                 span(cls := "font-bold", "using NIP07 pubkey: "),
@@ -241,7 +256,7 @@ object Main extends IOWebApp {
                   Styles.buttonSmall,
                   onClick --> (_.foreach(_ =>
                     store.nip07signer.set(NIP07.mkDebuggingSigner())
-                    *> useNip07.set(false)
+                      *> useNip07.set(false)
                   ))
                 )
               )
@@ -253,8 +268,28 @@ object Main extends IOWebApp {
                   "switch to NIP-07",
                   Styles.buttonSmall,
                   onClick --> (_.foreach(_ =>
-                    store.nip07signer.set(NIP07.mkSigner(window))
-                    *> useNip07.set(true)
+                    NIP07
+                      .mkSigner(window)
+                      // try to see if we have a public key yet
+                      .evalTap(_.publicKey.timeout(1.seconds))
+                      .attempt
+                      .map {
+                        // timeout was triggered
+                        case Left(_) => false
+                        // no error, so
+                        case Right(_) => true
+                      }
+                      .use(switchWasSuccessful =>
+                        if switchWasSuccessful then
+                          // since we are this far, we can probably safely
+                          // construct a new NIP07 signer and not need to guard
+                          // it with a timeout like above
+                          store.nip07signer.set(NIP07.mkSigner(window))
+                            *> useNip07.set(true)
+                        else
+                          // no change in signer
+                          IO.unit
+                      )
                   ))
                 )
               )
@@ -265,6 +300,6 @@ object Main extends IOWebApp {
               )
           }
         )
-        yield html
+      yield html
     }
 }

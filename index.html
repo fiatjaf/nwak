@@ -31,5 +31,24 @@
 <link rel="icon" type="image/x-icon" href="./favicon.ico">
 <body class="bg-glade-green-300 text-gray-900 m-0 w-full h-full">
   <div id="app" class="w-full h-full"></div>
+  <script>
+  window.wnjParams = {
+    position: 'bottom',
+    // The only accepted value is 'bottom', default is top
+    accent: 'green',
+    // Supported values: cyan (default), green, purple, red, orange, neutral, stone
+    startHidden: true,
+    // If the host page has a button that call `getPublicKey` to start a
+    // login procedure, the minimized widget can be hidden until connected
+    compactMode: true,
+    // Show the minimized widget in a compact form
+    disableOverflowFix: true,
+    // If the host page on mobile has an horizontal scrolling, the floating
+    // element/modal are pushed to the extreme right/bottom and exit the
+    // viewport. A style is injected in the html/body elements fix this.
+    // This option permit to disable this default behavior
+  }
+</script>
+<script src="https://unpkg.com/window.nostr.js/dist/window.nostr.js"></script>
   <script type="module" src="./target/esbuild/bundle.js"></script>
 </body>
