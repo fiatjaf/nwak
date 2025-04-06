@@ -59,7 +59,7 @@ object Main extends IOWebApp {
         div(
           cls := "order-1 lg-order-2 justify-self-start lg:flex lg:items-center lg:justify-center w-full",
           div(
-            cls := "bg-white w-full lg:w-auto lg:rounded-lg shadow-md p-4 pt-6 lg:p-12",
+            cls := "bg-white w-full lg:w-[90%] lg:rounded-lg shadow-md p-4 pt-6 lg:p-12",
             renderInput(store),
             renderActions(store)
           )
@@ -144,13 +144,13 @@ object Main extends IOWebApp {
         Styles.button,
         "generate event",
         onClick --> (_.foreach(_ =>
-          Resource.suspend(store.nip07signer.get).use{ signer => 
+          Resource.suspend(store.nip07signer.get).use{ signer =>
             for
               pubkey <- signer.publicKey
               generatedEvent <- IO(
-                Event( 
-                  kind = 1, 
-                  content = "hello world", 
+                Event(
+                  kind = 1,
+                  content = "hello world",
                   pubkey = Some(pubkey),
                   id = None
                 )
@@ -234,12 +234,12 @@ object Main extends IOWebApp {
           store.nip07signer: Signal[IO,Resource[IO,NIP07Signer[IO]]]).mapN{
             case (true, true, signer) =>
               div(
-                span("using NIP07 pubkey: "),
-                span(signer.flatMap(_.publicKeyHex.toResource)),
+                span(cls := "font-bold", "using NIP07 pubkey: "),
+                span(cls := "mr-4", signer.flatMap(_.publicKeyHex.toResource)),
                 button(
                   "switch to debugging key",
                   Styles.buttonSmall,
-                  onClick --> (_.foreach(_ => 
+                  onClick --> (_.foreach(_ =>
                     store.nip07signer.set(NIP07.mkDebuggingSigner())
                     *> useNip07.set(false)
                   ))
@@ -247,21 +247,21 @@ object Main extends IOWebApp {
               )
             case (true, false, signer) =>
               div(
-                span("using debugging pubkey: "),
-                span(signer.flatMap(_.publicKeyHex.toResource)),
+                span(cls := "font-bold", "using debugging pubkey: "),
+                span(cls := "mr-4", signer.flatMap(_.publicKeyHex.toResource)),
                 button(
-                  "switch to nip07",
+                  "switch to NIP-07",
                   Styles.buttonSmall,
-                  onClick --> (_.foreach(_ => 
+                  onClick --> (_.foreach(_ =>
                     store.nip07signer.set(NIP07.mkSigner(window))
                     *> useNip07.set(true)
                   ))
                 )
               )
-            case (_,_,signer) => 
+            case (_, _, signer) =>
               div(
-                span("using debugging pubkey: "),
-                span(signer.flatMap(_.publicKeyHex.toResource))       
+                span(cls := "font-bold", "using debugging pubkey: "),
+                span(signer.flatMap(_.publicKeyHex.toResource))
               )
           }
         )
